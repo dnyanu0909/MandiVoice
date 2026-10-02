@@ -11,7 +11,7 @@ const API_BASE =
   (import.meta as any).env?.VITE_BACKEND_URL ||
   (import.meta as any).env?.VITE_API_URL ||
   (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? 'https://mandi-voice-three.vercel.app'
+    ? window.location.origin
     : 'http://127.0.0.1:8000');
 
 export function App() {
