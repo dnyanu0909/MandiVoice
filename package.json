@@ -1,18 +1,8 @@
 {
-  "name": "mandivoice",
+  "name": "mandivoice-monorepo",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "@mendable/firecrawl-js": "^4.42.1",
-    "dotenv": "^18.0.5",
-    "zod": "^4.6.5"
+    "build": "cd frontend && npm install && npm run build"
   }
 }

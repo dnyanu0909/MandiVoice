@@ -26,8 +26,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# SQLite Database Setup via SQLAlchemy (handles local and Vercel serverless /tmp)
-db_dir = "/tmp" if os.environ.get("VERCEL") else os.path.dirname(__file__)
+# SQLite Database Setup via SQLAlchemy (handles local and Vercel serverless writable /tmp)
+import tempfile
+db_dir = tempfile.gettempdir() if os.environ.get("VERCEL") else os.path.dirname(__file__)
 db_path = os.path.join(db_dir, "trades.db")
 DATABASE_URL = f"sqlite:///{db_path}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
