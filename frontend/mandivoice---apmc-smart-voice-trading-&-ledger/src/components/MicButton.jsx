@@ -2,8 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Loader2, Send } from 'lucide-react';
 import { getUIText, LANGUAGES } from '../utils/i18n';
 
-// Using VITE_API_URL if configured, falling back to 127.0.0.1 to avoid Windows IPv6 localhost delay
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_BASE =
+  import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? 'https://mandi-voice-three.vercel.app'
+    : 'http://127.0.0.1:8000');
 
 export function MicButton({ onTranscriptParsed, isExtracting = false, currentLang = 'hi' }) {
   const [isListening, setIsListening] = useState(false);
@@ -92,9 +96,9 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
       clearTimeout(timeoutId);
       console.error('Extraction error:', err);
       if (err.name === 'AbortError') {
-        setErrorMsg('⏱️ Request timed out after 6s. Check if backend is running on port 8000.');
+        setErrorMsg(`⏱️ Request timed out. Backend at ${API_BASE} did not respond.`);
       } else {
-        setErrorMsg('⚠️ Cannot connect to Mandi API. Ensure uvicorn is running on port 8000.');
+        setErrorMsg(`⚠️ Cannot connect to Mandi API at ${API_BASE}. Ensure server is running.`);
       }
     } finally {
       setIsParsing(false);

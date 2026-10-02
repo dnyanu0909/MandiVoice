@@ -7,7 +7,12 @@ import { getUnsyncedTrades, markTradesSynced } from './utils/offlineDb';
 import { getUIText, LANGUAGES } from './utils/i18n';
 import { Wheat, Wifi, WifiOff, RefreshCw, CheckCircle2, Globe } from 'lucide-react';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_BASE =
+  (import.meta as any).env?.VITE_BACKEND_URL ||
+  (import.meta as any).env?.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? 'https://mandi-voice-three.vercel.app'
+    : 'http://127.0.0.1:8000');
 
 export function App() {
   const [currentTrade, setCurrentTrade] = useState(null);
