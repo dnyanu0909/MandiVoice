@@ -24,8 +24,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# SQLite Database Setup via SQLAlchemy
-DATABASE_URL = "sqlite:///./trades.db"
+# SQLite Database Setup via SQLAlchemy (handles local and Vercel serverless /tmp)
+db_dir = "/tmp" if os.environ.get("VERCEL") else os.path.dirname(__file__)
+db_path = os.path.join(db_dir, "trades.db")
+DATABASE_URL = f"sqlite:///{db_path}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -245,4 +247,21 @@ def list_trades(db: Session = Depends(get_db)):
 @app.get("/api/msp-data")
 def get_msp_data():
     return MSP_DATA
+
+
+@app.get("/")
+@app.get("/api")
+def health_check():
+    return {
+        "status": "online",
+        "service": "MandiVoice Trade Extraction & Validation API",
+        "version": "1.0.0",
+        "endpoints": [
+            "/api/transcribe-and-extract",
+            "/api/confirm-trade",
+            "/api/sync-offline",
+            "/api/trades",
+            "/api/msp-data"
+        ]
+    }
 

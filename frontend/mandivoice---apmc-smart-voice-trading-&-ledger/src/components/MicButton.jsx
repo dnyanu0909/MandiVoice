@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Loader2, Send } from 'lucide-react';
 import { getUIText, LANGUAGES } from '../utils/i18n';
 
-// Using 127.0.0.1 avoids Windows IPv6 localhost resolution delay
-const API_BASE = 'http://127.0.0.1:8000';
+// Using VITE_API_URL if configured, falling back to 127.0.0.1 to avoid Windows IPv6 localhost delay
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export function MicButton({ onTranscriptParsed, isExtracting = false, currentLang = 'hi' }) {
   const [isListening, setIsListening] = useState(false);

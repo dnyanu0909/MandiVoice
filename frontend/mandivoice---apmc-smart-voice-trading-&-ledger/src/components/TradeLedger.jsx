@@ -4,7 +4,7 @@ import { getAllLocalTrades } from '../utils/offlineDb';
 import { calculateApmcDeductions, shareWhatsAppChit } from '../utils/apmcFees';
 import { getUIText } from '../utils/i18n';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export function TradeLedger({ reloadTrigger, currentLang = 'hi' }) {
   const [trades, setTrades] = useState([]);

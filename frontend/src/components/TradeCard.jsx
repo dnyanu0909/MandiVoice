@@ -5,7 +5,7 @@ import { saveOfflineTrade } from '../utils/offlineDb';
 import { calculateApmcDeductions } from '../utils/apmcFees';
 import { getUIText } from '../utils/i18n';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const UNIT_MULTIPLIERS = {
   bori: 50,

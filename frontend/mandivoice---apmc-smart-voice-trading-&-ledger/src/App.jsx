@@ -7,7 +7,7 @@ import { getUnsyncedTrades, markTradesSynced } from './utils/offlineDb';
 import { getUIText, LANGUAGES } from './utils/i18n';
 import { Wheat, Wifi, WifiOff, RefreshCw, CheckCircle2, Globe } from 'lucide-react';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export function App() {
   const [currentTrade, setCurrentTrade] = useState(null);

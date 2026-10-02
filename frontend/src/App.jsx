@@ -7,7 +7,7 @@ import { getUnsyncedTrades, markTradesSynced } from './utils/offlineDb';
 import { getUIText, LANGUAGES } from './utils/i18n';
 import { Wheat, Wifi, WifiOff, RefreshCw, CheckCircle2, Globe } from 'lucide-react';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export function App() {
   const [currentTrade, setCurrentTrade] = useState(null);
@@ -136,7 +136,7 @@ export function App() {
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 bg-amber-950 text-amber-400 px-2.5 py-1 rounded-full text-[11px] font-black border border-amber-600 shadow-sm">
-                  <WifiOff className="w-3 h-3 animate-bounce" />
+                  <WifiOff className="w-3.5 h-3.5 animate-bounce" />
                   <span>Offline</span>
                 </div>
               )}
