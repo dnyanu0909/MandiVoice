@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "commodities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "commodity": { "type": "string" },
+          "msp_inr_per_quintal": { "type": "number" },
+          "season": { "type": "string" }
+        },
+        "required": ["commodity", "msp_inr_per_quintal"]
+      }
+    }
+  },
+  "required": ["commodities"]
+}

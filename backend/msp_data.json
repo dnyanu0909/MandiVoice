@@ -1,0 +1,8 @@
+{
+  "wheat": { "msp_per_quintal": 2425, "season": "Rabi 2025-26" },
+  "mustard": { "msp_per_quintal": 5950, "season": "Rabi 2025-26" },
+  "chana": { "msp_per_quintal": 5650, "season": "Rabi 2025-26" },
+  "paddy": { "msp_per_quintal": 2300, "season": "Kharif 2025-26" },
+  "soybean": { "msp_per_quintal": 4892, "season": "Kharif 2025-26" },
+  "cotton": { "msp_per_quintal": 7121, "season": "Kharif 2025-26" }
+}

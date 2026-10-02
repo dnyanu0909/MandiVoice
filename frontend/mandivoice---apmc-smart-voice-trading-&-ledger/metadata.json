@@ -1,0 +1,6 @@
+{
+  "name": "MandiVoice - APMC Smart Voice Trading & Ledger",
+  "description": "Bilingual voice-powered trading slip extractor, live mandi auction recording, MSP margin checker, and digital APMC ledger for farmers and commission agents.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

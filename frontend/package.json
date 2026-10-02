@@ -1,0 +1,9 @@
+{
+  "name": "mandivoice-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "node \"mandivoice---apmc-smart-voice-trading-&-ledger/node_modules/vite/bin/vite.js\" \"mandivoice---apmc-smart-voice-trading-&-ledger\" --port=3000 --host=0.0.0.0",
+    "build": "node \"mandivoice---apmc-smart-voice-trading-&-ledger/node_modules/vite/bin/vite.js\" build \"mandivoice---apmc-smart-voice-trading-&-ledger\""
+  }
+}
