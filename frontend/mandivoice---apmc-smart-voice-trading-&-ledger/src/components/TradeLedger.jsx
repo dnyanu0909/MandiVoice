@@ -7,9 +7,7 @@ import { getUIText } from '../utils/i18n';
 const API_BASE =
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? window.location.origin
-    : 'http://127.0.0.1:8000');
+  '';
 
 export function TradeLedger({ reloadTrigger, currentLang = 'hi' }) {
   const [trades, setTrades] = useState([]);

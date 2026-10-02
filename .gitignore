@@ -24,6 +24,8 @@ yarn-error.log*
 pnpm-debug.log*
 dist/
 */dist/
+!frontend/dist/
+!frontend/dist/**
 .output/
 
 # Environment Variables
