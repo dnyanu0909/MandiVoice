@@ -5,8 +5,12 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/(.*)",
-      "destination": "/frontend/dist/$1"
+      "source": "/api",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/((?!api|assets|favicon|logo).*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from typing import Generator, List, Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -74,6 +74,8 @@ def get_db() -> Generator[Session, None, None]:
 
 # Load MSP Reference Data
 MSP_FILE_PATH = os.path.join(os.path.dirname(__file__), "msp_data.json")
+if not os.path.exists(MSP_FILE_PATH):
+    MSP_FILE_PATH = os.path.join(os.path.dirname(__file__), "..", "backend", "msp_data.json")
 with open(MSP_FILE_PATH, "r", encoding="utf-8") as f:
     MSP_DATA = json.load(f)
 
@@ -147,7 +149,10 @@ def normalize_and_validate(trade: TradeExtraction) -> tuple[bool, float]:
     return below_msp, diff_percentage
 
 
-@app.post("/api/transcribe-and-extract")
+api_router = APIRouter()
+
+
+@api_router.post("/transcribe-and-extract")
 async def transcribe_and_extract(
     transcript: Optional[str] = Form(None),
     audio: Optional[UploadFile] = File(None),
@@ -175,7 +180,7 @@ async def transcribe_and_extract(
     }
 
 
-@app.post("/api/verify-trade")
+@api_router.post("/verify-trade")
 def verify_trade(trade: TradeExtraction):
     try:
         below_msp, diff_percentage = normalize_and_validate(trade)
@@ -188,7 +193,7 @@ def verify_trade(trade: TradeExtraction):
     return result
 
 
-@app.post("/api/confirm-trade")
+@api_router.post("/confirm-trade")
 def confirm_trade(trade: TradeExtraction, db: Session = Depends(get_db)):
     try:
         below_msp, diff_percentage = normalize_and_validate(trade)
@@ -224,7 +229,7 @@ def confirm_trade(trade: TradeExtraction, db: Session = Depends(get_db)):
     }
 
 
-@app.post("/api/sync-offline")
+@api_router.post("/sync-offline")
 def sync_offline(trades: List[TradeExtraction], db: Session = Depends(get_db)):
     synced_ids = []
     for trade in trades:
@@ -259,17 +264,23 @@ def sync_offline(trades: List[TradeExtraction], db: Session = Depends(get_db)):
     }
 
 
-@app.get("/api/trades")
+@api_router.get("/trades")
 def list_trades(db: Session = Depends(get_db)):
     return db.query(Trade).order_by(Trade.created_at.desc()).all()
 
 
-@app.get("/api/msp-data")
+@api_router.get("/msp-data")
 def get_msp_data():
     return MSP_DATA
 
 
+# Include trade API routes under both /api and root to guarantee 0 routing mismatch
+app.include_router(api_router, prefix="/api")
+app.include_router(api_router)
+
+
 @app.get("/api")
+@app.get("/api/")
 def health_check():
     return {
         "status": "online",
@@ -284,9 +295,10 @@ def health_check():
         ]
     }
 
-
 # Frontend dist folder path (supports running from repo root or backend/)
-frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
+if not os.path.exists(frontend_dist):
+    frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
 if not os.path.exists(frontend_dist):
     frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "dist"))
 

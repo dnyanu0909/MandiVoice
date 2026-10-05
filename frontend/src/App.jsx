@@ -6,11 +6,7 @@ import { speakTradeSummary } from './utils/tts';
 import { getUnsyncedTrades, markTradesSynced } from './utils/offlineDb';
 import { getUIText, LANGUAGES } from './utils/i18n';
 import { Wheat, Wifi, WifiOff, RefreshCw, CheckCircle2, Globe } from 'lucide-react';
-
-const API_BASE =
-  import.meta.env.VITE_BACKEND_URL ||
-  import.meta.env.VITE_API_URL ||
-  '';
+import { getApiBase } from './utils/apiConfig';
 
 export function App() {
   const [currentTrade, setCurrentTrade] = useState(null);
@@ -46,7 +42,8 @@ export function App() {
         confidence_score: Number(t.confidence_score) || 1.0,
       }));
 
-      const fetchUrl = API_BASE ? `${API_BASE}/api/sync-offline` : '/api/sync-offline';
+      const apiBase = getApiBase();
+      const fetchUrl = apiBase ? `${apiBase}/api/sync-offline` : '/api/sync-offline';
       const res = await fetch(fetchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

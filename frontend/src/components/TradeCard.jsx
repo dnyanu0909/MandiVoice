@@ -4,11 +4,7 @@ import { speakTradeSummary } from '../utils/tts';
 import { saveOfflineTrade } from '../utils/offlineDb';
 import { calculateApmcDeductions } from '../utils/apmcFees';
 import { getUIText } from '../utils/i18n';
-
-const API_BASE =
-  import.meta.env.VITE_BACKEND_URL ||
-  import.meta.env.VITE_API_URL ||
-  '';
+import { getApiBase } from '../utils/apiConfig';
 
 const UNIT_MULTIPLIERS = {
   bori: 50,
@@ -111,7 +107,8 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
       }
 
       // Online commit
-      const fetchUrl = API_BASE ? `${API_BASE}/api/confirm-trade` : '/api/confirm-trade';
+      const apiBase = getApiBase();
+      const fetchUrl = apiBase ? `${apiBase}/api/confirm-trade` : '/api/confirm-trade';
       const res = await fetch(fetchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

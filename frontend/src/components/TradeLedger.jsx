@@ -3,11 +3,7 @@ import { FileText, Printer, X, RefreshCw, AlertTriangle, CheckCircle2, WifiOff, 
 import { getAllLocalTrades } from '../utils/offlineDb';
 import { calculateApmcDeductions, shareWhatsAppChit } from '../utils/apmcFees';
 import { getUIText } from '../utils/i18n';
-
-const API_BASE =
-  import.meta.env.VITE_BACKEND_URL ||
-  import.meta.env.VITE_API_URL ||
-  '';
+import { getApiBase } from '../utils/apiConfig';
 
 export function TradeLedger({ reloadTrigger, currentLang = 'hi' }) {
   const [trades, setTrades] = useState([]);
@@ -23,7 +19,8 @@ export function TradeLedger({ reloadTrigger, currentLang = 'hi' }) {
 
       if (typeof navigator === 'undefined' || navigator.onLine) {
         try {
-          const fetchUrl = API_BASE ? `${API_BASE}/api/trades` : '/api/trades';
+          const apiBase = getApiBase();
+          const fetchUrl = apiBase ? `${apiBase}/api/trades` : '/api/trades';
           const res = await fetch(fetchUrl);
           if (res.ok) {
             serverTrades = await res.json();

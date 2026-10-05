@@ -2,11 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, Square, Loader2, Send } from 'lucide-react';
 import { getUIText } from '../utils/i18n';
 import { parseOfflineTrade } from '../utils/offlineParser';
-
-const API_BASE =
-  (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL.trim()) ||
-  (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim()) ||
-  '';
+import { getApiBase } from '../utils/apiConfig';
 
 export function MicButton({ onTranscriptParsed, isExtracting = false, currentLang = 'hi' }) {
   const [isListening, setIsListening] = useState(false);
@@ -46,7 +42,8 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
   const speechLang = getSpeechLang(currentLang);
 
   const getDisplayApiBase = () => {
-    if (API_BASE) return API_BASE;
+    const apiBase = getApiBase();
+    if (apiBase) return apiBase;
     if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
     return 'local server';
   };
@@ -81,8 +78,9 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
         const formData = new FormData();
         formData.append('transcript', cleanText);
 
-        const fetchUrl = API_BASE
-          ? `${API_BASE}/api/transcribe-and-extract`
+        const apiBase = getApiBase();
+        const fetchUrl = apiBase
+          ? `${apiBase}/api/transcribe-and-extract`
           : '/api/transcribe-and-extract';
 
         const res = await fetch(fetchUrl, {
@@ -108,7 +106,12 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
         // Fallback to offline parser when network fails
         const offlineTrade = parseOfflineTrade(cleanText);
         if (offlineTrade) {
-          setInfoNotice('🟠 Mandi Offline Mode: Network unavailable. Parsed locally on device.');
+          const isNetOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+          if (isNetOnline) {
+            setInfoNotice('🟠 Cloud API unreachable: Using local on-device trade parser.');
+          } else {
+            setInfoNotice('🟠 Mandi Offline Mode: Network unavailable. Parsed locally on device.');
+          }
           if (onTranscriptParsed) {
             onTranscriptParsed(offlineTrade, cleanText);
           }
@@ -259,8 +262,9 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
       const formData = new FormData();
       formData.append('audio', blob, 'recording.wav');
 
-      const fetchUrl = API_BASE
-        ? `${API_BASE}/api/transcribe-and-extract`
+      const apiBase = getApiBase();
+      const fetchUrl = apiBase
+        ? `${apiBase}/api/transcribe-and-extract`
         : '/api/transcribe-and-extract';
 
       const res = await fetch(fetchUrl, {
