@@ -3,8 +3,16 @@ import os
 import re
 from groq import Groq
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY, timeout=3.5) if GROQ_API_KEY else None
+
+def get_groq_client():
+    key = os.environ.get("GROQ_API_KEY")
+    if key and key.strip():
+        try:
+            return Groq(api_key=key.strip(), timeout=4.0)
+        except Exception:
+            return None
+    return None
+
 
 SYSTEM_PROMPT = """You are the MandiVoice Extraction Engine for Indian agricultural trade dialogues.
 Extract transaction entities and map regional terms in English, Hindi (Devanagari), Hinglish, Telugu, and Marathi.
@@ -158,6 +166,7 @@ def _fallback_extraction(transcript: str) -> dict:
 
 
 def extract_trade_from_text(transcript: str) -> dict:
+    client = get_groq_client()
     if client:
         try:
             resp = client.chat.completions.create(
@@ -186,6 +195,7 @@ def extract_trade_from_text(transcript: str) -> dict:
 
 
 def transcribe_audio(file_bytes: bytes, filename: str = "audio.wav") -> str:
+    client = get_groq_client()
     if client:
         try:
             transcription = client.audio.transcriptions.create(
