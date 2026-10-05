@@ -72,13 +72,14 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
 
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         const saved = await saveOfflineTrade(trade);
-        setCommitMessage('🟠 Device Offline: Saved to Offline Ledger (Auto-syncs when online)');
+        setCommitMessage('🟠 Mandi Offline Mode: Trade saved to local device cache. Will sync when reconnected.');
         if (onTradeConfirmed) onTradeConfirmed({ ...trade, id: `offline-${saved.id || Date.now()}`, is_offline: true });
         return;
       }
 
       // Try online commit
-      const res = await fetch(`${API_BASE}/api/confirm-trade`, {
+      const fetchUrl = API_BASE ? `${API_BASE}/api/confirm-trade` : '/api/confirm-trade';
+      const res = await fetch(fetchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(trade),
@@ -98,7 +99,7 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
       console.warn('Network error, saving to offline IndexedDB:', err);
       try {
         const saved = await saveOfflineTrade(trade);
-        setCommitMessage('🟠 Saved to Offline Ledger (Auto-syncs when reconnected)');
+        setCommitMessage('🟠 Mandi Offline Mode: Trade saved to local device cache. Will sync when reconnected.');
         if (onTradeConfirmed) onTradeConfirmed({ ...trade, id: `offline-${saved.id || Date.now()}`, is_offline: true });
       } catch (dbErr) {
         setCommitMessage('Failed to save trade. Please try again.');
@@ -407,7 +408,15 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
         </div>
 
         {commitMessage && (
-          <p className="text-xs font-bold text-center p-2.5 rounded-xl bg-slate-900 text-emerald-400 border border-slate-700 mt-2 shadow">
+          <p
+            className={`text-xs font-bold text-center p-2.5 rounded-xl border mt-2 shadow animate-fade-in ${
+              commitMessage.startsWith('🟠')
+                ? 'bg-amber-50 text-amber-900 border-amber-300'
+                : commitMessage.startsWith('✓')
+                ? 'bg-emerald-950 text-emerald-400 border-emerald-600'
+                : 'bg-red-50 text-red-900 border-red-300'
+            }`}
+          >
             {commitMessage}
           </p>
         )}

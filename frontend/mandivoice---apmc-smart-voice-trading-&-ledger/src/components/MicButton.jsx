@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, Square, Loader2, Send } from 'lucide-react';
-import { getUIText, LANGUAGES } from '../utils/i18n';
+import { getUIText } from '../utils/i18n';
+import { parseOfflineTrade } from '../utils/offlineParser';
 
 const API_BASE =
-  import.meta.env.VITE_BACKEND_URL ||
-  import.meta.env.VITE_API_URL ||
+  (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL.trim()) ||
+  (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim()) ||
   '';
 
 export function MicButton({ onTranscriptParsed, isExtracting = false, currentLang = 'hi' }) {
@@ -12,47 +13,212 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
   const [isParsing, setIsParsing] = useState(false);
   const [fallbackText, setFallbackText] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [infoNotice, setInfoNotice] = useState('');
+
   const recognitionRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const silenceTimerRef = useRef(null);
+  const accumulatedTranscriptRef = useRef('');
+  const isListeningRef = useRef(false);
 
   const isLoading = isParsing || isExtracting;
   const ui = getUIText(currentLang);
 
-  const langObj = LANGUAGES.find((l) => l.id === currentLang) || LANGUAGES[0];
-  const speechLang = langObj.speechLang || 'hi-IN';
+  const getSpeechLang = (lang) => {
+    switch ((lang || 'hi').toLowerCase()) {
+      case 'te':
+      case 'telugu':
+        return 'te-IN';
+      case 'mr':
+      case 'marathi':
+        return 'mr-IN';
+      case 'en':
+      case 'english':
+        return 'en-IN';
+      case 'hi':
+      case 'hinglish':
+      default:
+        return 'hi-IN';
+    }
+  };
 
+  const speechLang = getSpeechLang(currentLang);
+
+  const getDisplayApiBase = () => {
+    if (API_BASE) return API_BASE;
+    if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
+    return 'local server';
+  };
+
+  const processTranscript = useCallback(
+    async (text) => {
+      if (!text || !text.trim() || isLoading) return;
+      const cleanText = text.trim();
+      setIsParsing(true);
+      setErrorMsg('');
+      setInfoNotice('');
+
+      // OFFLINE GUARD: If offline, do not execute external network fetch
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const offlineTrade = parseOfflineTrade(cleanText);
+        if (offlineTrade) {
+          setInfoNotice('🟠 Mandi Offline Mode: Parsed locally on device.');
+          if (onTranscriptParsed) {
+            onTranscriptParsed(offlineTrade, cleanText);
+          }
+        } else {
+          setErrorMsg('⚠️ Could not extract trade details from speech.');
+        }
+        setIsParsing(false);
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6500);
+
+      try {
+        const formData = new FormData();
+        formData.append('transcript', cleanText);
+
+        const fetchUrl = API_BASE
+          ? `${API_BASE}/api/transcribe-and-extract`
+          : '/api/transcribe-and-extract';
+
+        const res = await fetch(fetchUrl, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (onTranscriptParsed) {
+          onTranscriptParsed(data.trade, data.transcript || cleanText);
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.warn('Extraction network error, checking offline fallback:', err);
+
+        // Fallback to offline parser when network fails
+        const offlineTrade = parseOfflineTrade(cleanText);
+        if (offlineTrade) {
+          setInfoNotice('🟠 Mandi Offline Mode: Network unavailable. Parsed locally on device.');
+          if (onTranscriptParsed) {
+            onTranscriptParsed(offlineTrade, cleanText);
+          }
+        } else {
+          if (err.name === 'AbortError') {
+            setErrorMsg(`⏱️ Request timed out. Backend at ${getDisplayApiBase()} did not respond.`);
+          } else {
+            setErrorMsg(`⚠️ Cannot connect to Mandi API at ${getDisplayApiBase()}. Ensure server is running.`);
+          }
+        }
+      } finally {
+        setIsParsing(false);
+      }
+    },
+    [isLoading, onTranscriptParsed]
+  );
+
+  const stopListening = useCallback(
+    (shouldSubmit = true) => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+
+      isListeningRef.current = false;
+      setIsListening(false);
+
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {}
+      }
+
+      if (shouldSubmit) {
+        const finalTranscript = accumulatedTranscriptRef.current.trim();
+        if (finalTranscript) {
+          processTranscript(finalTranscript);
+        }
+      }
+    },
+    [processTranscript]
+  );
+
+  // Initialize SpeechRecognition with continuous=true & interimResults=true
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
+
     if (SpeechRecognition) {
       try {
         const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
+        recognition.continuous = true;
+        recognition.interimResults = true;
         recognition.lang = speechLang;
 
         recognition.onstart = () => {
+          isListeningRef.current = true;
           setIsListening(true);
           setErrorMsg('');
+          setInfoNotice('');
         };
 
-        recognition.onresult = async (event) => {
-          const transcript = event.results[0][0].transcript;
-          setIsListening(false);
-          if (transcript) {
-            setFallbackText(transcript);
-            await sendTextToBackend(transcript);
+        recognition.onresult = (event) => {
+          let fullTranscript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            fullTranscript += event.results[i][0].transcript;
+          }
+
+          if (fullTranscript) {
+            accumulatedTranscriptRef.current = fullTranscript;
+            setFallbackText(fullTranscript);
+
+            // 2000ms silence debounce timer: do not auto-stop on short pauses
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+            }
+            silenceTimerRef.current = setTimeout(() => {
+              if (isListeningRef.current) {
+                stopListening(true);
+              }
+            }, 2000);
           }
         };
 
         recognition.onerror = (e) => {
           console.warn('Speech recognition notice:', e);
-          setIsListening(false);
+          if (e.error === 'not-allowed') {
+            setErrorMsg('Microphone permission denied. Enable microphone access or use text input.');
+            stopListening(false);
+          }
         };
 
         recognition.onend = () => {
-          setIsListening(false);
+          if (isListeningRef.current) {
+            // Keep active if user did not stop and silence timer hasn't expired yet
+            try {
+              recognition.start();
+            } catch {
+              setIsListening(false);
+              isListeningRef.current = false;
+            }
+          } else {
+            setIsListening(false);
+          }
         };
 
         recognitionRef.current = recognition;
@@ -60,53 +226,31 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
         console.warn('SpeechRecognition initialization notice:', err);
       }
     }
-  }, [speechLang]);
 
-  const sendTextToBackend = async (text) => {
-    if (!text || !text.trim() || isLoading) return;
-    setIsParsing(true);
-    setErrorMsg('');
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6500);
-
-    try {
-      const formData = new FormData();
-      formData.append('transcript', text.trim());
-
-      const res = await fetch(`${API_BASE}/api/transcribe-and-extract`, {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        throw new Error(`Server returned HTTP ${res.status}`);
+    return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
       }
-
-      const data = await res.json();
-      if (onTranscriptParsed) {
-        onTranscriptParsed(data.trade, data.transcript || text);
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
       }
-    } catch (err) {
-      clearTimeout(timeoutId);
-      console.error('Extraction error:', err);
-      if (err.name === 'AbortError') {
-        setErrorMsg(`⏱️ Request timed out. Backend at ${API_BASE} did not respond.`);
-      } else {
-        setErrorMsg(`⚠️ Cannot connect to Mandi API at ${API_BASE}. Ensure server is running.`);
-      }
-    } finally {
-      setIsParsing(false);
-    }
-  };
+    };
+  }, [speechLang, stopListening]);
 
   const sendAudioToBackend = async (blob) => {
     if (isLoading) return;
     setIsParsing(true);
     setErrorMsg('');
+    setInfoNotice('');
+
+    // Offline Guard for audio blob
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setErrorMsg('🟠 Offline: Voice recording requires network. Please use text input below for offline parsing.');
+      setIsParsing(false);
+      return;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -115,7 +259,11 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
       const formData = new FormData();
       formData.append('audio', blob, 'recording.wav');
 
-      const res = await fetch(`${API_BASE}/api/transcribe-and-extract`, {
+      const fetchUrl = API_BASE
+        ? `${API_BASE}/api/transcribe-and-extract`
+        : '/api/transcribe-and-extract';
+
+      const res = await fetch(fetchUrl, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
@@ -137,7 +285,7 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
       if (err.name === 'AbortError') {
         setErrorMsg('⏱️ Audio transcription timed out.');
       } else {
-        setErrorMsg('⚠️ Audio upload failed. Check backend connection on port 8000.');
+        setErrorMsg(`⚠️ Cannot connect to Mandi API at ${getDisplayApiBase()}. Ensure server is running.`);
       }
     } finally {
       setIsParsing(false);
@@ -146,16 +294,21 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
 
   const startListening = async () => {
     setErrorMsg('');
+    setInfoNotice('');
+    accumulatedTranscriptRef.current = '';
+    setFallbackText('');
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.lang = speechLang;
         recognitionRef.current.start();
         return;
       } catch (err) {
-        console.warn('SpeechRecognition fallback to MediaRecorder:', err);
+        console.warn('SpeechRecognition start fallback to MediaRecorder:', err);
       }
     }
 
+    // MediaRecorder Fallback if Web Speech API unavailable
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
@@ -170,6 +323,7 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
       };
       mr.start();
       mediaRecorderRef.current = mr;
+      isListeningRef.current = true;
       setIsListening(true);
     } catch (err) {
       console.error('Mic access denied:', err);
@@ -177,23 +331,10 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
     }
   };
 
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {}
-    }
-    setIsListening(false);
-  };
-
+  // Toggle listening on/off cleanly with Push-To-Talk button
   const handleToggle = () => {
     if (isListening) {
-      stopListening();
+      stopListening(true);
     } else {
       startListening();
     }
@@ -201,7 +342,7 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
 
   const handleFallbackSubmit = (e) => {
     e.preventDefault();
-    sendTextToBackend(fallbackText);
+    processTranscript(fallbackText);
   };
 
   return (
@@ -250,6 +391,14 @@ export function MicButton({ onTranscriptParsed, isExtracting = false, currentLan
           : ui.tapToSpeak}
       </p>
 
+      {/* Amber Offline Info Notification */}
+      {infoNotice && (
+        <p className="text-xs font-bold text-amber-900 bg-amber-50 p-2.5 rounded-xl border-2 border-amber-300 mb-3 text-center w-full shadow-sm animate-fade-in">
+          {infoNotice}
+        </p>
+      )}
+
+      {/* Error Alert Banner */}
       {errorMsg && (
         <p className="text-xs font-bold text-red-700 bg-red-50 p-2.5 rounded-xl border-2 border-red-200 mb-3 text-center w-full shadow-sm animate-fade-in">
           {errorMsg}

@@ -21,13 +21,16 @@ export function TradeLedger({ reloadTrigger, currentLang = 'hi' }) {
       setIsLoading(true);
       let serverTrades = [];
 
-      try {
-        const res = await fetch(`${API_BASE}/api/trades`);
-        if (res.ok) {
-          serverTrades = await res.json();
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        try {
+          const fetchUrl = API_BASE ? `${API_BASE}/api/trades` : '/api/trades';
+          const res = await fetch(fetchUrl);
+          if (res.ok) {
+            serverTrades = await res.json();
+          }
+        } catch (e) {
+          console.warn('Backend currently unreachable, falling back to local trades:', e);
         }
-      } catch (e) {
-        console.warn('Backend currently unreachable, falling back to local trades:', e);
       }
 
       // Also get local trades from IndexedDB
