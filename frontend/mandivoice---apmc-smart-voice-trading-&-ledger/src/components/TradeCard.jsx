@@ -18,6 +18,15 @@ const UNIT_MULTIPLIERS = {
   kg: 1,
 };
 
+const DEFAULT_MSP_INFO = {
+  wheat: { rate: 2425, season: 'Rabi 2025-26' },
+  mustard: { rate: 5950, season: 'Rabi 2025-26' },
+  chana: { rate: 5650, season: 'Rabi 2025-26' },
+  paddy: { rate: 2300, season: 'Kharif 2025-26' },
+  soybean: { rate: 4892, season: 'Kharif 2025-26' },
+  cotton: { rate: 7121, season: 'Kharif 2025-26' },
+};
+
 export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang = 'hi' }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -28,7 +37,14 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
   const ui = getUIText(currentLang);
 
   useEffect(() => {
-    setEditForm(trade || {});
+    if (trade) {
+      const commKey = (trade.commodity || '').toLowerCase().trim();
+      const defaultMsp = DEFAULT_MSP_INFO[commKey]?.rate || 2425;
+      setEditForm({
+        ...trade,
+        benchmark_msp: Number(trade.benchmark_msp) > 0 ? Number(trade.benchmark_msp) : defaultMsp,
+      });
+    }
     setCommitMessage('');
   }, [trade]);
 
@@ -52,6 +68,20 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
       total = Math.round((stdKg / 100) * rate * 100) / 100;
     }
 
+    // Benchmark MSP calculation & dynamic banner flip
+    const commKey = (editForm.commodity || '').toLowerCase().trim();
+    const defaultMsp = DEFAULT_MSP_INFO[commKey]?.rate || 2425;
+    const benchmarkRate = Number(editForm.benchmark_msp) > 0 ? Number(editForm.benchmark_msp) : defaultMsp;
+
+    const effectivePricePerQtl = editForm.rate_unit === 'per_kg' ? rate * 100 : rate;
+    let belowMsp = false;
+    let diffPercentage = 0;
+
+    if (benchmarkRate > 0) {
+      belowMsp = effectivePricePerQtl < benchmarkRate;
+      diffPercentage = Math.round(((effectivePricePerQtl - benchmarkRate) / benchmarkRate) * 10000) / 100;
+    }
+
     const updated = {
       ...trade,
       ...editForm,
@@ -59,6 +89,9 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
       negotiated_rate: rate,
       standard_quantity_kg: stdKg,
       total_amount_inr: total,
+      benchmark_msp: benchmarkRate,
+      below_msp: belowMsp,
+      diff_percentage: diffPercentage,
     };
 
     if (onTradeUpdated) onTradeUpdated(updated);
@@ -77,7 +110,7 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
         return;
       }
 
-      // Try online commit
+      // Online commit
       const fetchUrl = API_BASE ? `${API_BASE}/api/confirm-trade` : '/api/confirm-trade';
       const res = await fetch(fetchUrl, {
         method: 'POST',
@@ -90,7 +123,7 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
       }
 
       const data = await res.json();
-      setCommitMessage(`✓ Trade #${data.id || ''} Confirmed & Committed to Mandi Cloud!`);
+      setCommitMessage(`✓ Trade #${data.trade_id || data.id || ''} Confirmed & Committed to Mandi Cloud!`);
 
       if (onTradeConfirmed) {
         onTradeConfirmed(data);
@@ -109,19 +142,27 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
     }
   };
 
+  const commKey = (trade.commodity || '').toLowerCase().trim();
+  const mspMeta = DEFAULT_MSP_INFO[commKey] || { rate: 2425, season: '2025-26' };
+  const currentBenchmarkMsp = Number(trade.benchmark_msp) > 0 ? Number(trade.benchmark_msp) : mspMeta.rate;
+  const currentMspSeason = mspMeta.season;
+  const effectiveRatePerQtl = trade.rate_unit === 'per_kg'
+    ? Number(trade.negotiated_rate || 0) * 100
+    : Number(trade.negotiated_rate || 0);
+
   const weightInQuintals = (Number(trade.standard_quantity_kg || 0) / 100).toFixed(2);
   const diffDisplay = trade.diff_percentage !== undefined ? Math.abs(trade.diff_percentage) : 0;
   const deductions = calculateApmcDeductions(trade);
 
   return (
     <div
-      className={`w-full max-w-md mx-auto my-4 bg-white rounded-2xl shadow-xl border-4 overflow-hidden transition-all ${
+      className={`w-full max-w-md mx-auto my-4 bg-white rounded-2xl shadow-xl border-4 overflow-hidden transition-all duration-300 ${
         trade.below_msp ? 'border-red-500' : 'border-emerald-500'
       }`}
     >
       {/* MSP Flag Banner */}
       <div
-        className={`px-4 py-3 flex items-center justify-between font-black text-sm text-white ${
+        className={`px-4 py-3 flex items-center justify-between font-black text-sm text-white transition-colors duration-300 ${
           trade.below_msp ? 'bg-red-600' : 'bg-emerald-600'
         }`}
       >
@@ -129,12 +170,12 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
           {trade.below_msp ? (
             <>
               <AlertTriangle className="w-5 h-5 shrink-0 animate-pulse" />
-              <span>{ui.belowMsp} ({diffDisplay}% below benchmark)</span>
+              <span>{ui.belowMsp} ({diffDisplay}% Deficit vs MSP)</span>
             </>
           ) : (
             <>
               <CheckCircle2 className="w-5 h-5 shrink-0" />
-              <span>{ui.fairRate}</span>
+              <span>{ui.fairRate} ({diffDisplay}% Premium vs MSP)</span>
             </>
           )}
         </div>
@@ -200,26 +241,54 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
             </div>
 
             {/* Rate & Gross Deal Amount */}
-            <div className="bg-slate-900 text-white p-4 rounded-xl shadow-inner flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  {ui.rateLabel}
-                </span>
-                <span className="text-xl font-black text-amber-400">
-                  ₹{Number(trade.negotiated_rate || 0).toLocaleString('en-IN')}{' '}
-                  <span className="text-xs font-normal text-slate-300">
-                    /{trade.rate_unit === 'per_kg' ? 'kg' : 'quintal'}
+            <div className="bg-slate-900 text-white p-4 rounded-xl shadow-inner space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                    {ui.rateLabel}
                   </span>
-                </span>
+                  <span className="text-xl font-black text-amber-400">
+                    ₹{Number(trade.negotiated_rate || 0).toLocaleString('en-IN')}{' '}
+                    <span className="text-xs font-normal text-slate-300">
+                      /{trade.rate_unit === 'per_kg' ? 'kg' : 'quintal'}
+                    </span>
+                  </span>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                    {ui.grossTotal}
+                  </span>
+                  <span className="text-2xl font-black text-white tracking-tight font-mono">
+                    ₹{Number(trade.total_amount_inr || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
               </div>
 
-              <div className="text-right">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                  {ui.grossTotal}
-                </span>
-                <span className="text-2xl font-black text-white tracking-tight font-mono">
-                  ₹{Number(trade.total_amount_inr || 0).toLocaleString('en-IN')}
-                </span>
+              {/* Transparent MSP Benchmark Badge & Delta Comparison Formula */}
+              <div className="pt-2.5 border-t border-slate-800 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <span className="inline-flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-400/30 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                    🏛️ Govt MSP: ₹{currentBenchmarkMsp.toLocaleString('en-IN')}/qtl (Agmarknet {currentMspSeason})
+                  </span>
+                  <span
+                    className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                      trade.below_msp
+                        ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    }`}
+                  >
+                    {trade.below_msp ? '⚠️ Below MSP' : '✅ Fair MSP'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-300 font-mono flex items-center justify-between flex-wrap">
+                  <span>
+                    Negotiated: ₹{effectiveRatePerQtl.toLocaleString('en-IN')}/qtl vs MSP: ₹{currentBenchmarkMsp.toLocaleString('en-IN')}/qtl
+                  </span>
+                  <span className={`font-bold ml-1 ${trade.below_msp ? 'text-red-400' : 'text-emerald-400'}`}>
+                    ➔ {diffDisplay}% {trade.below_msp ? 'Deficit' : 'Premium'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -372,10 +441,27 @@ export function TradeCard({ trade, onTradeConfirmed, onTradeUpdated, currentLang
               </div>
             </div>
 
+            {/* Editable Benchmark MSP Rate Input */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block flex items-center justify-between">
+                <span>Benchmark MSP Rate (₹/quintal)</span>
+                <span className="text-[10px] text-amber-800 font-semibold">APMC / Official reference</span>
+              </label>
+              <input
+                type="number"
+                value={editForm.benchmark_msp ?? currentBenchmarkMsp}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, benchmark_msp: e.target.value })
+                }
+                className="w-full text-xs font-bold p-2 bg-white border border-amber-300 rounded-lg focus:ring-1 focus:ring-amber-500"
+                placeholder="e.g. 2425"
+              />
+            </div>
+
             <button
               type="button"
               onClick={handleSaveEdit}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 shadow cursor-pointer"
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-2 rounded-lg flex items-center justify-center gap-1.5 shadow cursor-pointer transition-transform active:scale-95"
             >
               <Check className="w-4 h-4" />
               <span>Apply & Recalculate</span>

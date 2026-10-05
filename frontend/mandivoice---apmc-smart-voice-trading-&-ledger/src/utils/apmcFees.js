@@ -42,6 +42,7 @@ export function shareWhatsAppChit(trade) {
   const buyer = trade.buyer || trade.buyer_name || 'Trader';
   const deductions = calculateApmcDeductions(trade);
   const mspStatus = trade.below_msp ? '⚠️ Below MSP Alert' : '✅ Fair MSP Deal';
+  const mspRefText = trade.benchmark_msp ? ` (MSP: ₹${trade.benchmark_msp}/qtl)` : '';
   const refId = trade.id ? `MV-${trade.id}` : 'MV-1';
 
   const chitText = 
@@ -53,7 +54,7 @@ Ref: #${refId}
 🌱 Commodity: ${trade.commodity}
 ⚖️ Qty: ${trade.raw_quantity} ${trade.raw_unit} (${trade.standard_quantity_kg} kg)
 💰 Rate: ₹${trade.negotiated_rate} (${trade.rate_unit === 'per_kg' ? 'per kg' : 'per quintal'})
-📊 MSP Status: ${mspStatus}
+📊 MSP Status: ${mspStatus}${mspRefText}
 --------------------------------
 💵 Gross Total: ₹${Number(trade.total_amount_inr || 0).toLocaleString('en-IN')}
 🏷️ Net Farmer Payout: ₹${Number(deductions.netPayout || 0).toLocaleString('en-IN')}

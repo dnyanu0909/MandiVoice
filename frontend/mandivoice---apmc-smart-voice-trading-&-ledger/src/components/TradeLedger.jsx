@@ -117,6 +117,11 @@ export function TradeLedger({ reloadTrigger, currentLang = 'hi' }) {
                         <CheckCircle2 className="w-3 h-3" /> Fair Rate
                       </span>
                     )}
+                    {t.benchmark_msp > 0 && (
+                      <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-300">
+                        MSP: ₹{t.benchmark_msp}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -229,11 +234,16 @@ export function TradeLedger({ reloadTrigger, currentLang = 'hi' }) {
                   ₹{selectedSlip.negotiated_rate}/{selectedSlip.rate_unit === 'per_kg' ? 'kg' : 'quintal'}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-baseline">
                 <span className="text-slate-500">Govt MSP Status:</span>
-                <span className={`font-black ${selectedSlip.below_msp ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {selectedSlip.below_msp ? '⚠️ Below MSP Alert' : '✅ Fair MSP Deal'}
-                </span>
+                <div className="text-right">
+                  <span className={`font-black block ${selectedSlip.below_msp ? 'text-red-600' : 'text-emerald-600'}`}>
+                    {selectedSlip.below_msp ? '⚠️ Below MSP Alert' : '✅ Fair MSP Deal'}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">
+                    Compared against APMC MSP: ₹{selectedSlip.benchmark_msp || '2425'}/qtl
+                  </span>
+                </div>
               </div>
 
               {/* Deductions Breakdown */}

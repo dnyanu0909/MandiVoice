@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, create_engine
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 try:
@@ -52,9 +52,18 @@ class Trade(Base):
     confidence_score = Column(Float, default=1.0)
     below_msp = Column(Boolean, default=False)
     diff_percentage = Column(Float, default=0.0)
+    benchmark_msp = Column(Float, default=0.0, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
+
+# Auto-migrate benchmark_msp column if table already exists in SQLite
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE trades ADD COLUMN benchmark_msp FLOAT DEFAULT 0.0"))
+        conn.commit()
+except Exception:
+    pass
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
@@ -88,6 +97,7 @@ class TradeExtraction(BaseModel):
     rate_unit: str
     total_amount_inr: Optional[float] = None
     confidence_score: Optional[float] = 1.0
+    benchmark_msp: Optional[float] = None
 
 
 def normalize_and_validate(trade: TradeExtraction) -> tuple[bool, float]:
@@ -111,18 +121,22 @@ def normalize_and_validate(trade: TradeExtraction) -> tuple[bool, float]:
     else:
         raise ValueError(f"Unsupported rate_unit '{trade.rate_unit}'. Supported: 'per_quintal', 'per_kg'")
 
-    # Check against msp_data.json
-    comm = trade.commodity.strip().lower()
-    msp_entry = MSP_DATA.get(comm)
-    if not msp_entry:
-        alias_map = {"paddy_common": "paddy", "cotton_medium": "cotton"}
-        msp_entry = MSP_DATA.get(alias_map.get(comm))
+    # Check against benchmark_msp or fallback to msp_data.json
+    if trade.benchmark_msp is not None and float(trade.benchmark_msp) > 0:
+        msp_per_quintal = float(trade.benchmark_msp)
+    else:
+        comm = trade.commodity.strip().lower()
+        msp_entry = MSP_DATA.get(comm)
+        if not msp_entry:
+            alias_map = {"paddy_common": "paddy", "cotton_medium": "cotton"}
+            msp_entry = MSP_DATA.get(alias_map.get(comm))
 
-    msp_per_quintal = 0.0
-    if isinstance(msp_entry, dict):
-        msp_per_quintal = float(msp_entry.get("msp_per_quintal", 0.0))
-    elif isinstance(msp_entry, (int, float)):
-        msp_per_quintal = float(msp_entry)
+        msp_per_quintal = 0.0
+        if isinstance(msp_entry, dict):
+            msp_per_quintal = float(msp_entry.get("msp_per_quintal", 0.0))
+        elif isinstance(msp_entry, (int, float)):
+            msp_per_quintal = float(msp_entry)
+        trade.benchmark_msp = msp_per_quintal
 
     if msp_per_quintal > 0:
         below_msp = effective_price_per_quintal < msp_per_quintal
@@ -194,6 +208,7 @@ def confirm_trade(trade: TradeExtraction, db: Session = Depends(get_db)):
         confidence_score=trade.confidence_score if trade.confidence_score is not None else 1.0,
         below_msp=below_msp,
         diff_percentage=diff_percentage,
+        benchmark_msp=trade.benchmark_msp or 0.0,
     )
     db.add(db_trade)
     db.commit()
@@ -205,6 +220,7 @@ def confirm_trade(trade: TradeExtraction, db: Session = Depends(get_db)):
         "trade": trade.model_dump(),
         "below_msp": below_msp,
         "diff_percentage": diff_percentage,
+        "benchmark_msp": db_trade.benchmark_msp,
     }
 
 
@@ -229,6 +245,7 @@ def sync_offline(trades: List[TradeExtraction], db: Session = Depends(get_db)):
             confidence_score=trade.confidence_score if trade.confidence_score is not None else 1.0,
             below_msp=below_msp,
             diff_percentage=diff_percentage,
+            benchmark_msp=trade.benchmark_msp or 0.0,
         )
         db.add(db_trade)
         db.commit()

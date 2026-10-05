@@ -159,6 +159,7 @@ export function parseOfflineTrade(text) {
     total_amount_inr: totalAmountInr,
     below_msp: belowMsp,
     diff_percentage: diffPercentage,
+    benchmark_msp: mspRate,
     confidence_score: 0.9,
     is_offline: true,
   };
