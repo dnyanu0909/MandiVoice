@@ -1,25 +1,25 @@
 import os
 import sys
 
-current_dir = os.path.dirname(__file__)
+# Ensure module search paths prioritize local api/backend and project backend
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_root_dir = os.path.abspath(os.path.join(_current_dir, ".."))
+_local_backend = os.path.join(_current_dir, "backend")
+_parent_backend = os.path.join(_root_dir, "backend")
 
-# 1. Local backend inside api/ (if bundled directly inside lambda)
-local_backend = os.path.abspath(os.path.join(current_dir, "backend"))
-if os.path.exists(local_backend) and local_backend not in sys.path:
-    sys.path.insert(0, local_backend)
+for _path in [_local_backend, _parent_backend, _root_dir, _current_dir]:
+    if os.path.exists(_path) and _path not in sys.path:
+        sys.path.insert(0, _path)
 
-# 2. Parent backend in monorepo root
-parent_backend = os.path.abspath(os.path.join(current_dir, "..", "backend"))
-if os.path.exists(parent_backend) and parent_backend not in sys.path:
-    sys.path.insert(0, parent_backend)
-
-root_dir = os.path.abspath(os.path.join(current_dir, ".."))
-if root_dir not in sys.path:
-    sys.path.insert(0, root_dir)
-
+# Import the FastAPI application
 try:
-    from backend.main import app
+    from backend.main import app as _fastapi_app
 except ImportError:
-    from main import app
+    from main import app as _fastapi_app
 
-__all__ = ["app"]
+# Vercel Python serverless runtime entrypoints require top-level 'app', 'application', or 'handler'
+app = _fastapi_app
+application = _fastapi_app
+handler = _fastapi_app
+
+__all__ = ["app", "application", "handler"]
