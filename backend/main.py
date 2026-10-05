@@ -28,7 +28,8 @@ app.add_middleware(
 
 # SQLite Database Setup via SQLAlchemy (handles local and Vercel serverless writable /tmp)
 import tempfile
-db_dir = tempfile.gettempdir() if os.environ.get("VERCEL") else os.path.dirname(__file__)
+is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+db_dir = tempfile.gettempdir() if is_serverless else os.path.dirname(__file__)
 db_path = os.path.join(db_dir, "trades.db")
 DATABASE_URL = f"sqlite:///{db_path}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -72,10 +73,14 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
-# Load MSP Reference Data
-MSP_FILE_PATH = os.path.join(os.path.dirname(__file__), "msp_data.json")
-if not os.path.exists(MSP_FILE_PATH):
-    MSP_FILE_PATH = os.path.join(os.path.dirname(__file__), "..", "backend", "msp_data.json")
+# Load MSP Reference Data with multiple candidate fallback locations
+candidate_paths = [
+    os.path.join(os.path.dirname(__file__), "msp_data.json"),
+    os.path.join(os.path.dirname(__file__), "..", "backend", "msp_data.json"),
+    os.path.join(os.getcwd(), "backend", "msp_data.json"),
+    os.path.join(os.getcwd(), "msp_data.json"),
+]
+MSP_FILE_PATH = next((p for p in candidate_paths if os.path.exists(p)), candidate_paths[0])
 with open(MSP_FILE_PATH, "r", encoding="utf-8") as f:
     MSP_DATA = json.load(f)
 
